@@ -1,0 +1,21 @@
+{
+  "name": "tecnologias-de-seguranca",
+  "version": "1.0.0",
+  "main": "bank.ts",
+  "license": "MIT",
+  "scripts": {
+    "start": "ts-node .",
+    "start-args": "ts-node . -p 5456 -s test.bank",
+    "start-wrongargs": "ts-node . -g ffgr.bank",
+    "start-dupp": "ts-node . -p 5456 -p 54555 -s test.bank ",
+    "start-dups": "ts-node . -p 5456 -s test.bank -s test.bank"
+  },
+  "dependencies": {
+    "@types/node": "^18.15.9",
+    "@types/yargs": "^17.0.24",
+    "nodemon": "^2.0.22",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.2",
+    "yargs": "^17.7.1"
+  }
+}
