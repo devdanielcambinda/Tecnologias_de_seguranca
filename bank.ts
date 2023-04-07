@@ -97,20 +97,23 @@ const main = async () => {
     // create the server
     const server: net.Server = net.createServer(async (socket) => {
 
-      socket.on("data", (data: Buffer) => {
+      socket.on("data", async (data: Buffer) => {
         // where I'm going to receive the data from the client
-        const data_content = JSON.parse(data.toString());
+        const data_json = data.toString()
+        const data_content = JSON.parse(data_json)
+        console.log(data_content.store.operations)
 
-        if(data_content.store){
+        /*if(data_content.store){
+            console.log('here')
             const store_content = data_content as StoreRequest;
             console.log(store_content);
-            return socket.write('store content detected');
-        }
+            socket.write('store content detected');
+        }*/
         
       });
 
-      socket.on('connec', () => {
-            console.log('connected');
+      socket.on('end', () => {
+            console.log('mf left');
       })
 
 
