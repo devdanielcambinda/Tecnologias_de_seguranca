@@ -9,5 +9,9 @@ const socket: net.Socket = net.connect(3000, "localhost", () => {
   socket.write(content_data);
 
   // Close the socket after sending the data
-  socket.end();
+  //socket.end();
 });
+
+socket.on("data", (data: Buffer) => {
+  console.log(data.toString());
+})

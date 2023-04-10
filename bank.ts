@@ -101,14 +101,24 @@ const main = async () => {
         // where I'm going to receive the data from the client
         const data_json = data.toString()
         const data_content = JSON.parse(data_json)
-        console.log(data_content.store.operations)
+        //console.log(data_content.store.operations)
 
-        /*if(data_content.store){
+        if(data_content.store){
             console.log('here')
             const store_content = data_content as StoreRequest;
             console.log(store_content);
             socket.write('store content detected');
-        }*/
+            socket.end()
+        }
+
+        if(data_content.mbec){
+            console.log('here')
+            const mbec_content = data_content as MBECRequest;
+            console.log(mbec_content);
+            return socket.write('mbec content detected');
+        }
+
+        return socket.end()
         
       });
 
@@ -117,6 +127,10 @@ const main = async () => {
       })
 
 
+    });
+
+    server.on("error", (err) => {
+      console.error(err);
     });
 
     server.listen(p, () => {
