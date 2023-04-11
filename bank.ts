@@ -4,7 +4,14 @@ import net from "net";
 import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 
-let users = new Set<{}>();
+
+type User = {
+  account: string,
+  balance: number,
+  vcc: [string,number,boolean] // ts tuple - [vcc_file_name, numbe ,is_valid]
+}
+
+const  users = new Set<User>();
 
 type StoreRequest = {
   store: {
@@ -17,7 +24,15 @@ type StoreRequest = {
   };
 };
 
-type MBECRequest = {};
+type MBECRequest = {
+  mbec: {
+    operations: "create"  | "deposit" | "withdraw" | "get";
+    data: {
+
+    }
+  }
+
+};
 
 function generateRandomString(length: number): string {
   let result = "";
@@ -28,6 +43,26 @@ function generateRandomString(length: number): string {
     result += characters.charAt(Math.floor(Math.random() * charactersLength));
   }
   return result;
+}
+
+function createAccount(data: MBECRequest): boolean{
+  //check mbec.data keys and see if they are valid for this operation
+  return true
+}
+
+function getAccountBalance(data: MBECRequest): boolean{
+  //check mbec.data keys and see if they are valid for this operation
+  return true
+}
+
+function withdrawAccountBalance(data: MBECRequest): boolean{
+  //check mbec.data keys and see if they are valid for this operation
+  return true
+}
+
+function depositAccountBalance(data: MBECRequest): boolean{
+  //check mbec.data keys and see if they are valid for this operation
+  return true
 }
 
 //server excution
@@ -101,7 +136,6 @@ const main = async () => {
         // where I'm going to receive the data from the client
         const data_json = data.toString()
         const data_content = JSON.parse(data_json)
-        //console.log(data_content.store.operations)
 
         if(data_content.store){
             console.log('here')
@@ -112,10 +146,25 @@ const main = async () => {
         }
 
         if(data_content.mbec){
-            console.log('here')
             const mbec_content = data_content as MBECRequest;
-            console.log(mbec_content);
-            return socket.write('mbec content detected');
+            switch(mbec_content.mbec.operations){
+              case 'create':
+                console.log('create')
+                break
+              case 'deposit':
+                console.log('deposit')
+                break
+              case 'withdraw':
+                console.log('withdraw')
+                break
+              case 'get':
+                console.log('get')
+                console.log(mbec_content);
+                socket.write('mbec content detected');
+                break
+              default:
+                break
+            }
         }
 
         return socket.end()
