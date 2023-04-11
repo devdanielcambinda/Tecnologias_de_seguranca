@@ -1,17 +1,16 @@
 import * as yargs from "yargs";
 import path from "path";
 import net from "net";
-import { existsSync } from "node:fs";
-import * as fs from "node:fs/promises";
+import { existsSync, writeFile } from "node:fs";
 
-
+// type definitions
 type User = {
-  account: string,
-  balance: number,
-  vcc: [string,number,boolean] // ts tuple - [vcc_file_name, numbe ,is_valid]
-}
+  account: string;
+  balance: number;
+  vcc: [string, number, boolean] | null; // ts tuple - [vcc_file_name, vcc_balance , is_used] or null when account is created
+};
 
-const  users = new Set<User>();
+const users = new Set<User>();
 
 type StoreRequest = {
   store: {
@@ -24,16 +23,21 @@ type StoreRequest = {
   };
 };
 
-type MBECRequest = {
-  mbec: {
-    operations: "create"  | "deposit" | "withdraw" | "get";
+type MBCERequest = {
+  mbce: {
+    operations: "create" | "deposit" | "get" | "add_card";
     data: {
-
-    }
-  }
-
+      account?: string;
+      initial_balance?: number;
+      deposit?: number;
+      withdraw ?: number;
+    };
+  };
 };
 
+type Response = [boolean, string]; // [sucessful, message]
+
+// functions
 function generateRandomString(length: number): string {
   let result = "";
   const characters =
@@ -45,25 +49,116 @@ function generateRandomString(length: number): string {
   return result;
 }
 
-function createAccount(data: MBECRequest): boolean{
-  //check mbec.data keys and see if they are valid for this operation
-  return true
+function createAccount(data: MBCERequest): Response {
+  //check mbce.data keys and see if they are valid for this operation
+  const requiredKeys = ["account", "initial_balance"];
+  const dataKeys = Object.keys(data.mbce.data);
+  const isValid = requiredKeys.every((key) => dataKeys.includes(key)); //check if all required keys are in the data object, the other will be ignored
+
+  if (!isValid) {
+    // true if both required keys are in the data object
+    return [false, "essential keys are missing"];
+  }
+
+  //check if account already exists
+  const accountExists = Array.from(users).some(
+    (user) => user.account === data.mbce.data.account
+  ); //check if any user has the same account as the one provided
+
+  if (accountExists) {
+    return [false, "account already exists"];
+  }
+
+  const { account, initial_balance } = data.mbce.data;
+
+  if (initial_balance! < 15.0) {
+    return [false, "initial balance must be at least 15"];
+  } // ! is used to tell ts that the value is not null (it is not null because of the check above
+
+  //create the account
+  const newUser: User = {
+    account: account!,
+    balance: initial_balance!,
+    vcc: null,
+  };
+  //add the new user to the users set
+  users.add(newUser);
+  const jsonMessage = JSON.stringify({ account, initial_balance });
+  return [true, jsonMessage];
 }
 
-function getAccountBalance(data: MBECRequest): boolean{
-  //check mbec.data keys and see if they are valid for this operation
-  return true
+function depositAccountBalance(data: MBCERequest): Response {
+  //check mbce.data keys and see if they are valid for this operation
+  const requiredKeys = ["account", "deposit"];
+  const dataKeys = Object.keys(data.mbce.data);
+  const isValid = requiredKeys.every((key) => dataKeys.includes(key)); //check if all required keys are in the data object, the other will be ignored
+
+  if (!isValid) {
+    // true if both required keys are in the data object
+    return [false, "essential keys are missing"];
+  }
+
+  //check if account exists
+  const accountExists = Array.from(users).some(
+    (user) => user.account === data.mbce.data.account
+  ); //check if any user has the same account as the one provided
+
+  if (!accountExists) {
+    return [false, "account does not exist"];
+  }
+
+  const { account, deposit } = data.mbce.data;
+
+  if (deposit! <= 0.0) {
+    return [false, "deposit must be greater than 0"];
+  }
+
+  //update the balance
+  users.forEach((user) => {
+    if (user.account === account) {
+      user.balance += deposit!;
+      return;
+    }
+  });
+
+  const jsonMessage = JSON.stringify({ account, deposit });
+
+  return [true, jsonMessage];
 }
 
-function withdrawAccountBalance(data: MBECRequest): boolean{
-  //check mbec.data keys and see if they are valid for this operation
-  return true
+function getAccountBalance(data: MBCERequest): Response {
+  //check mbce.data keys and see if they are valid for this operation
+  const requiredKeys = ["account", "deposit"];
+  const dataKeys = Object.keys(data.mbce.data);
+  const isValid = requiredKeys.every((key) => dataKeys.includes(key)); //check if all required keys are in the data object, the other will be ignored
+
+  if (!isValid) {
+    // true if both required keys are in the data object
+    return [false, "essential keys are missing"];
+  }
+
+  //check if account exists
+  const accountExists = Array.from(users).some(
+    (user) => user.account === data.mbce.data.account
+  ); //check if any user has the same account as the one provided
+
+  if (!accountExists) {
+    return [false, "account does not exist"];
+  }
+
+  const { account } = data.mbce.data;
+
+  //get the balance
+  const user = Array.from(users).find((user) => user.account === account);
+  const jsonMessage = JSON.stringify({ account, balance: user!.balance });
+
+  return [true, jsonMessage];
 }
 
-function depositAccountBalance(data: MBECRequest): boolean{
-  //check mbec.data keys and see if they are valid for this operation
-  return true
+function addCard(data: MBCERequest): Response {
+  return [true, "add card"];
 }
+
 
 //server excution
 const main = async () => {
@@ -125,57 +220,70 @@ const main = async () => {
     }
 
     // create the auth file
-    fs.writeFile(authFilePath, generateRandomString(128)).then(() => {
+    writeFile(authFilePath, generateRandomString(128), () => {
       console.log("created");
-    }).catch((err) => console.error(err));
+    });
 
     // create the server
     const server: net.Server = net.createServer(async (socket) => {
-
       socket.on("data", async (data: Buffer) => {
         // where I'm going to receive the data from the client
-        const data_json = data.toString()
-        const data_content = JSON.parse(data_json)
+        const data_json = data.toString();
+        const data_content = JSON.parse(data_json);
 
-        if(data_content.store){
-            console.log('here')
-            const store_content = data_content as StoreRequest;
-            console.log(store_content);
-            socket.write('store content detected');
-            socket.end()
+        if (data_content.store) {
+          console.log("here");
+          const store_content = data_content as StoreRequest;
+          console.log(store_content);
+          socket.write("store content detected");
+          socket.end();
         }
 
-        if(data_content.mbec){
-            const mbec_content = data_content as MBECRequest;
-            switch(mbec_content.mbec.operations){
-              case 'create':
-                console.log('create')
-                break
-              case 'deposit':
-                console.log('deposit')
-                break
-              case 'withdraw':
-                console.log('withdraw')
-                break
-              case 'get':
-                console.log('get')
-                console.log(mbec_content);
-                socket.write('mbec content detected');
-                break
-              default:
-                break
-            }
+        if (data_content.mbce) {
+          const mbec_content = data_content as MBCERequest;
+          let sucessful: boolean;
+          switch (mbec_content.mbce.operations) {
+            case "create":
+              let [sucessful, message] = createAccount(mbec_content);
+
+              if (!sucessful) {
+                socket.write("Account creation failed");
+              }
+              socket.write(message);
+              console.log(message);
+              break;
+            case "deposit":
+              [sucessful, message] = depositAccountBalance(mbec_content);
+              if (!sucessful) {
+                socket.write("Deposit failed");
+              }
+              socket.write(message);
+              console.log(message);
+              break;
+            case "add_card":
+              [sucessful, message] = addCard(mbec_content);
+              if (!sucessful) {
+                socket.write("Add card failed");
+              }
+              socket.write(message);
+            case "get":
+              [sucessful, message] = getAccountBalance(mbec_content);
+              if (!sucessful) {
+                socket.write("Get balance failed");
+              }
+              socket.write("mbce content detected");
+              break;
+            default:
+              break;
+          }
         }
 
-        return socket.end()
-        
+        return socket.end();
       });
 
-      socket.on('end', () => {
-            console.log('mf left');
-      })
-
-
+      socket.on("end", () => {
+        console.log("mf left");
+      });
     });
 
     server.on("error", (err) => {
@@ -184,6 +292,16 @@ const main = async () => {
 
     server.listen(p, () => {
       console.log(`Server is listening on port ${p}`);
+    });
+
+    process.on("SIGINT", () => {
+      // processing ctrl + c
+      console.log("\n Received SIGINT. Closing server...");
+      // Perform any cleanup or additional actions as needed
+      server.close(() => {
+        console.log("Server closed. Exiting...");
+        process.exit(0); // Exit the process with a status code of 0 (success)
+      });
     });
   } catch (err) {
     console.error(err);
