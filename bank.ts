@@ -30,7 +30,7 @@ type MBCERequest = {
       account?: string;
       initial_balance?: number;
       deposit?: number;
-      withdraw ?: number;
+      //vcc
     };
   };
 };
@@ -159,6 +159,9 @@ function addCard(data: MBCERequest): Response {
   return [true, "add card"];
 }
 
+function validatePurchase(data: StoreRequest): Response {
+  return [true, "validate purchase"];
+}
 
 //server excution
 const main = async () => {
@@ -232,10 +235,16 @@ const main = async () => {
         const data_content = JSON.parse(data_json);
 
         if (data_content.store) {
-          console.log("here");
           const store_content = data_content as StoreRequest;
           console.log(store_content);
+          // verificar se o auth file coincide 
+          // verificar se o cartão está ativo
+          // verificar se a conta do cartão tem dinheiro suficiente
           socket.write("store content detected");
+          const response = {
+            sucess:true,
+            message: JSON.stringify({isCardValid: true, accountBalanceBeforePurchase: 45454.00, })
+          }
           socket.end();
         }
 
