@@ -23,14 +23,14 @@ type StoreRequest = {
   };
 };
 
-type MBCERequest = {
-  mbce: {
+type MBECRequest = {
+  mbec: {
     operations: "create" | "deposit" | "get" | "add_card";
     data: {
       account?: string;
       initial_balance?: number;
       deposit?: number;
-      //vcc
+      vcc ?: any
     };
   };
 };
@@ -49,10 +49,10 @@ function generateRandomString(length: number): string {
   return result;
 }
 
-function createAccount(data: MBCERequest): Response {
-  //check mbce.data keys and see if they are valid for this operation
-  const requiredKeys = ["account", "initial_balance"];
-  const dataKeys = Object.keys(data.mbce.data);
+function createAccount(data: MBECRequest): Response {
+  //check mbec.data keys and see if they are valid for this operation
+  const requiredKeys = ["account", "initial_balance","auth_file"];
+  const dataKeys = Object.keys(data.mbec.data);
   const isValid = requiredKeys.every((key) => dataKeys.includes(key)); //check if all required keys are in the data object, the other will be ignored
 
   if (!isValid) {
@@ -62,14 +62,14 @@ function createAccount(data: MBCERequest): Response {
 
   //check if account already exists
   const accountExists = Array.from(users).some(
-    (user) => user.account === data.mbce.data.account
+    (user) => user.account === data.mbec.data.account
   ); //check if any user has the same account as the one provided
 
   if (accountExists) {
     return [false, "account already exists"];
   }
 
-  const { account, initial_balance } = data.mbce.data;
+  const { account, initial_balance,vcc } = data.mbec.data;
 
   if (initial_balance! < 15.0) {
     return [false, "initial balance must be at least 15"];
@@ -87,10 +87,15 @@ function createAccount(data: MBCERequest): Response {
   return [true, jsonMessage];
 }
 
-function depositAccountBalance(data: MBCERequest): Response {
-  //check mbce.data keys and see if they are valid for this operation
-  const requiredKeys = ["account", "deposit"];
-  const dataKeys = Object.keys(data.mbce.data);
+function withdraw(data: MBECRequest): Response{
+  //account auth_file card_file withdraw
+  return [true, "withdraw"];
+}
+
+function depositAccountBalance(data: MBECRequest): Response {
+  //check mbec.data keys and see if they are valid for this operation
+  const requiredKeys = ["account", "deposit", "auth_file"];
+  const dataKeys = Object.keys(data.mbec.data);
   const isValid = requiredKeys.every((key) => dataKeys.includes(key)); //check if all required keys are in the data object, the other will be ignored
 
   if (!isValid) {
@@ -100,14 +105,14 @@ function depositAccountBalance(data: MBCERequest): Response {
 
   //check if account exists
   const accountExists = Array.from(users).some(
-    (user) => user.account === data.mbce.data.account
+    (user) => user.account === data.mbec.data.account
   ); //check if any user has the same account as the one provided
 
   if (!accountExists) {
     return [false, "account does not exist"];
   }
 
-  const { account, deposit } = data.mbce.data;
+  const { account, deposit } = data.mbec.data;
 
   if (deposit! <= 0.0) {
     return [false, "deposit must be greater than 0"];
@@ -117,7 +122,7 @@ function depositAccountBalance(data: MBCERequest): Response {
   users.forEach((user) => {
     if (user.account === account) {
       user.balance += deposit!;
-      return;
+      return
     }
   });
 
@@ -126,10 +131,10 @@ function depositAccountBalance(data: MBCERequest): Response {
   return [true, jsonMessage];
 }
 
-function getAccountBalance(data: MBCERequest): Response {
-  //check mbce.data keys and see if they are valid for this operation
-  const requiredKeys = ["account", "deposit"];
-  const dataKeys = Object.keys(data.mbce.data);
+function getAccountBalance(data: MBECRequest): Response {
+  //check mbec.data keys and see if they are valid for this operation
+  const requiredKeys = ["account", "auth_file","card_file"];
+  const dataKeys = Object.keys(data.mbec.data);
   const isValid = requiredKeys.every((key) => dataKeys.includes(key)); //check if all required keys are in the data object, the other will be ignored
 
   if (!isValid) {
@@ -139,14 +144,14 @@ function getAccountBalance(data: MBCERequest): Response {
 
   //check if account exists
   const accountExists = Array.from(users).some(
-    (user) => user.account === data.mbce.data.account
+    (user) => user.account === data.mbec.data.account
   ); //check if any user has the same account as the one provided
 
   if (!accountExists) {
     return [false, "account does not exist"];
   }
 
-  const { account } = data.mbce.data;
+  const { account } = data.mbec.data;
 
   //get the balance
   const user = Array.from(users).find((user) => user.account === account);
@@ -155,12 +160,40 @@ function getAccountBalance(data: MBCERequest): Response {
   return [true, jsonMessage];
 }
 
-function addCard(data: MBCERequest): Response {
+function addCard(data: MBECRequest): Response {
+  // account auth_file card_file virtual_credit_card
   return [true, "add card"];
 }
 
-function validatePurchase(data: StoreRequest): Response {
-  return [true, "validate purchase"];
+function validatePurchase(data: StoreRequest, runningServerAuthFile: string): Response {
+  //TODO verify if works 
+        // verificar se o auth file coincide --done 
+        // verificar se o cartão está ativo --d one 
+        // verificar se a conta do cartão tem dinheiro suficiente
+  let balanceBeforeOperation = 0.00;
+
+  if ( data.store.data.name_auth_file !== runningServerAuthFile){ // compared file content 
+    return [false, JSON.stringify(`{isCardValid: fale, accountBalanceBeforePurchase: 0.00 }`)];
+  }
+
+  const cardExists = Array.from(users).some( user => user.vcc![0] === data.store.data.vcc);
+
+  if (!cardExists){
+    return [false, JSON.stringify(`{isCardValid: false, accountBalanceBeforePurchase: 0.00 }`)];
+  }
+
+  users.forEach((user) => {
+    if (user.vcc![0] === data.store.data.vcc) {
+      if(user.balance - data.store.data.shopping_value < 0.00){
+        return
+      }
+      balanceBeforeOperation = user.balance;
+      user.balance -= data.store.data.shopping_value!;
+    }
+  });
+  
+  const jsonMessage = JSON.stringify(`{isCardValid: true, accountBalanceBeforePurchase: ${balanceBeforeOperation}, auth_file_name: ${runningServerAuthFile} }`)
+  return [true, jsonMessage];
 }
 
 //server excution
@@ -211,8 +244,8 @@ const main = async () => {
     // get the port number and the auth file name
     let { p, s } = await args;
 
-    p == undefined ? (p = 3000) : (p = p); // if p is not provided, use 3000 as default
-    s == undefined ? (s = "bank.auth") : (s = s); // if s is not provided, use 'bank.auth' as default
+    p === undefined ? p = 3000 : p = p; // if p is not provided, use 3000 as default
+    s === undefined ? s = "bank.auth" : s = s; // if s is not provided, use 'bank.auth' as default
 
     // check/create the auth file
     const authFilePath = path.join(__dirname, s);
@@ -236,51 +269,44 @@ const main = async () => {
 
         if (data_content.store) {
           const store_content = data_content as StoreRequest;
-          console.log(store_content);
-          // verificar se o auth file coincide 
-          // verificar se o cartão está ativo
-          // verificar se a conta do cartão tem dinheiro suficiente
-          socket.write("store content detected");
-          const response = {
-            sucess:true,
-            message: JSON.stringify({isCardValid: true, accountBalanceBeforePurchase: 45454.00, })
-          }
+          let [sucessful, message] = validatePurchase(store_content, s!);
+          socket.write(message)
           socket.end();
         }
 
-        if (data_content.mbce) {
-          const mbec_content = data_content as MBCERequest;
-          let sucessful: boolean;
-          switch (mbec_content.mbce.operations) {
+        if (data_content.mbec) {
+          const mbec_content = data_content as MBECRequest;
+          switch (mbec_content.mbec.operations) {
             case "create":
               let [sucessful, message] = createAccount(mbec_content);
 
               if (!sucessful) {
-                socket.write("Account creation failed");
+                return socket.write("Account creation failed");
               }
               socket.write(message);
               console.log(message);
               break;
             case "deposit":
-              [sucessful, message] = depositAccountBalance(mbec_content);
-              if (!sucessful) {
-                socket.write("Deposit failed");
+              let [sucessfulDeposit, messageDeposit] = depositAccountBalance(mbec_content);
+              if (!sucessfulDeposit) {
+                return socket.write("Deposit failed");
               }
-              socket.write(message);
-              console.log(message);
+              socket.write(messageDeposit);
+              console.log(messageDeposit);
               break;
             case "add_card":
-              [sucessful, message] = addCard(mbec_content);
-              if (!sucessful) {
-                socket.write("Add card failed");
+              let [sucessfulAddCard, messageAddCard] = addCard(mbec_content);
+              if (!sucessfulAddCard) {
+                return socket.write("adding card failed");
               }
-              socket.write(message);
+              socket.write(messageAddCard);
             case "get":
-              [sucessful, message] = getAccountBalance(mbec_content);
-              if (!sucessful) {
-                socket.write("Get balance failed");
+              let [sucessfulGet, messageGet] = getAccountBalance(mbec_content);
+              if (!sucessfulGet) {
+                return socket.write("Get balance failed");
               }
-              socket.write("mbce content detected");
+              socket.write(messageGet);
+              console.log(messageGet);
               break;
             default:
               break;
@@ -290,9 +316,6 @@ const main = async () => {
         return socket.end();
       });
 
-      socket.on("end", () => {
-        console.log("mf left");
-      });
     });
 
     server.on("error", (err) => {
