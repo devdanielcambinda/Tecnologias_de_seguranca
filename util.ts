@@ -1,5 +1,14 @@
 import crypto from 'crypto';
-import * as fs from 'fs';
+import * as fs from 'node:fs';
+
+export function verifyAuthFile(auth_file: string, origin: string,runningServerAuthFile: string): boolean {
+    const auth_file_data = fs.readFileSync(`../${origin}/${auth_file}`, "utf-8");
+    const runningServerAuthFile_data = fs.readFileSync(runningServerAuthFile, "utf-8");
+    if(auth_file_data !== runningServerAuthFile_data){
+      return false
+    }
+    return true
+}
 
 function generateDataToHashFromFile(file_name: string): Buffer {
     const len_file = fs.statSync(file_name).size;
@@ -41,12 +50,12 @@ export function encrypt(command_to_encrypt: string, name_auth_file: string): str
     const key = generateDataToHashFromFile(name_auth_file).toString("utf-8");
     const final_key = crypto.createHash("sha256").update(key).digest();
 
-    let padded_text = padding(command_to_encrypt);
-    let bytes_padded_text = Buffer.from(padded_text, "utf-8");
+    let padded_text:any = padding(command_to_encrypt);
+    padded_text = Buffer.from(padded_text, "utf-8");
 
     const cipher_config = crypto.createCipheriv("aes-256-cbc", final_key, iv);
 
-    const ciphertext = Buffer.concat([cipher_config.update(bytes_padded_text), cipher_config.final()]);
+    const ciphertext = Buffer.concat([cipher_config.update(padded_text), cipher_config.final()]);
 
     const ret = `{"ciphertext": "${ciphertext.toString("base64")}", "iv": "${iv.toString("base64")}"}`;
     return ret;
@@ -57,8 +66,13 @@ export function decrypt(enc_dict: string, name_auth_file: string): string {
     const enc_text = Buffer.from(enc_dict_obj.ciphertext, "base64");
     const enc_iv = Buffer.from(enc_dict_obj.iv, "base64");
 
+    console.log(enc_iv);
+
     const key = generateDataToHashFromFile(name_auth_file).toString("utf-8");
     const final_key = crypto.createHash("sha256").update(key).digest();
+
+    console.log(key);
+    console.log(final_key);
 
     const decipher = crypto.createDecipheriv("aes-256-cbc", final_key, enc_iv);
 

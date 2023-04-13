@@ -1,7 +1,9 @@
 import * as yargs from "yargs";
 import path from "path";
 import net from "net";
-import { existsSync, writeFile } from "node:fs";
+import { existsSync, writeFile} from "fs";
+import {encrypt,decrypt, verifyAuthFile} from './util'
+
 
 // type definitions
 type User = {
@@ -53,7 +55,9 @@ function generateRandomString(length: number): string {
   return result;
 }
 
-function createAccount(data: MBECRequest): Response {
+
+
+function createAccount(data: MBECRequest, runningServerAuthFile: string): Response {
   //check mbec.data keys and see if they are valid for this operation
   const requiredKeys = ["account", "initial_balance","auth_file", "account_file"];
   const dataKeys = Object.keys(data.mbec.data);
@@ -62,6 +66,12 @@ function createAccount(data: MBECRequest): Response {
   if (!isValid) {
     // true if both required keys are in the data object
     return [false, "essential keys are missing"];
+  }
+
+  //check if auth file matches the running server auth file
+  const valid = verifyAuthFile(data.mbec.data.auth_file, "mbce",runningServerAuthFile);
+  if (!valid) {
+    return [false, "auth file does not match"];
   }
 
   //check if account already exists
@@ -92,12 +102,7 @@ function createAccount(data: MBECRequest): Response {
   return [true, jsonMessage];
 }
 
-function withdrawAccountBalance(data: MBECRequest): Response{
-  //account auth_file card_file withdraw
-  return [true, "withdraw"];
-}
-
-function depositAccountBalance(data: MBECRequest): Response {
+function depositAccountBalance(data: MBECRequest, runningServerAuthFile: string): Response {
   //check mbec.data keys and see if they are valid for this operation
   const requiredKeys = ["account", "deposit", "auth_file"];
   const dataKeys = Object.keys(data.mbec.data);
@@ -106,6 +111,12 @@ function depositAccountBalance(data: MBECRequest): Response {
   if (!isValid) {
     // true if both required keys are in the data object
     return [false, "essential keys are missing"];
+  }
+
+  //check if auth file matches the running server auth file
+  const valid = verifyAuthFile(data.mbec.data.auth_file, "mbce",runningServerAuthFile);
+  if (!valid) {
+    return [false, "auth file does not match"];
   }
 
   //check if account exists
@@ -136,7 +147,7 @@ function depositAccountBalance(data: MBECRequest): Response {
   return [true, jsonMessage];
 }
 
-function getAccountBalance(data: MBECRequest): Response {
+function getAccountBalance(data: MBECRequest, runningServerAuthFile: string): Response {
   //check mbec.data keys and see if they are valid for this operation
   const requiredKeys = ["account", "auth_file", "account_file"];
   const dataKeys = Object.keys(data.mbec.data);
@@ -145,6 +156,12 @@ function getAccountBalance(data: MBECRequest): Response {
   if (!isValid) {
     // true if both required keys are in the data object
     return [false, "essential keys are missing"];
+  }
+
+  //check if auth file matches the running server auth file
+  const valid = verifyAuthFile(data.mbec.data.auth_file, "mbce",runningServerAuthFile);
+  if (!valid) {
+    return [false, "auth file does not match"];
   }
 
   //check if account exists
@@ -170,7 +187,7 @@ function getAccountBalance(data: MBECRequest): Response {
   return [true, jsonMessage];
 }
 
-function addCard(data: MBECRequest): Response {
+function addCard(data: MBECRequest, runningServerAuthFile: string): Response {
   // account auth_file vcc_amount
   const requiredKeys = ["account", "auth_file", "vcc_amount", "vcc_file" , "account_file"];
   const dataKeys = Object.keys(data.mbec.data);
@@ -179,6 +196,12 @@ function addCard(data: MBECRequest): Response {
   if (!isValid) {
     // true if both required keys are in the data object
     return [false, "essential keys are missing"];
+  }
+
+  //check if auth file matches the running server auth file
+  const valid = verifyAuthFile(data.mbec.data.auth_file, "mbce",runningServerAuthFile);
+  if (!valid) {
+    return [false, "auth file does not match"];
   }
 
   //check if account exists
@@ -234,28 +257,40 @@ function validatePurchase(data: StoreRequest, runningServerAuthFile: string): Re
   const dataKeys = Object.keys(data.store.data);
   const isValid = requiredKeys.every((key) => dataKeys.includes(key)); //check if all required keys are in the data object, the other will be ignored
   
-  let balanceBeforeOperation = 0.00;
-
-  if ( data.store.data.name_auth_file !== runningServerAuthFile){ // compared file content 
-    return [false, JSON.stringify(`{isCardValid: false, accountBalanceBeforePurchase: 0.00 }`)];
+  if (!isValid) {
+    // true if both required keys are in the data object
+    return [false, "essential keys are missing"];
+  }
+  
+  //check if auth file matches the running server auth file
+  const valid = verifyAuthFile(data.store.data.name_auth_file, "store",runningServerAuthFile);
+  if (!valid) {
+    return [false, "auth file does not match"];
   }
 
+  let balanceBeforeOperation = 0.00;
+/*
   const cardExists = Array.from(users).some( user => user.vcc![0] === data.store.data.vcc);
 
   if (!cardExists){
     return [false, JSON.stringify(`{isCardValid: false, accountBalanceBeforePurchase: 0.00 }`)];
   }
 
+  let sucessful:boolean = false
   users.forEach((user) => {
     if (user.vcc![0] === data.store.data.vcc) {
       if(user.balance - data.store.data.shopping_value < 0.00){
-        return
+        return sucessful = false
       }
       balanceBeforeOperation = user.balance;
       user.balance -= data.store.data.shopping_value!;
+      return sucessful = true;
     }
   });
-  
+
+  if(!sucessful){
+    return [false, JSON.stringify(`{isCardValid: false, accountBalanceBeforePurchase: 0.00 }`)];
+  }*/
   const jsonMessage = JSON.stringify(`{isCardValid: true, accountBalanceBeforePurchase: ${balanceBeforeOperation}, auth_file_name: ${runningServerAuthFile} }`)
   return [true, jsonMessage];
 }
@@ -327,9 +362,10 @@ const main = async () => {
     // create the server
     const server: net.Server = net.createServer(async (socket) => {
       socket.on("data", async (data: Buffer) => {
-        // where I'm going to receive the data from the client
-        const data_json = data.toString();
-        const data_content = JSON.parse(data_json);
+
+        console.log("data: ", data.toString());
+        const data_decrypted  = decrypt(data.toString(),"abc.txt");
+        const data_content = JSON.parse(data_decrypted);
 
         if (data_content.store) {
           const store_content = data_content as StoreRequest;
@@ -345,7 +381,7 @@ const main = async () => {
           const mbec_content = data_content as MBECRequest;
           switch (mbec_content.mbec.operations) {
             case "create":
-              let [sucessful, message] = createAccount(mbec_content);
+              let [sucessful, message] = createAccount(mbec_content,s!);
 
               if (!sucessful) {
                 return process.exit(125);
@@ -354,7 +390,7 @@ const main = async () => {
               console.log(message);
               break;
             case "deposit":
-              let [sucessfulDeposit, messageDeposit] = depositAccountBalance(mbec_content);
+              let [sucessfulDeposit, messageDeposit] = depositAccountBalance(mbec_content,s!);
               if (!sucessfulDeposit) {
                 return process.exit(125);
               }
@@ -362,7 +398,7 @@ const main = async () => {
               console.log(messageDeposit);
               break;
             case "add_card":
-              let [sucessfulAddCard, messageAddCard] = addCard(mbec_content);
+              let [sucessfulAddCard, messageAddCard] = addCard(mbec_content,s!);
               if (!sucessfulAddCard) {
                 return process.exit(125);
               }
@@ -370,21 +406,13 @@ const main = async () => {
               console.log(messageAddCard);
               break
             case "get":
-              let [sucessfulGet, messageGet] = getAccountBalance(mbec_content);
+              let [sucessfulGet, messageGet] = getAccountBalance(mbec_content,s!);
               console.log(sucessfulGet, messageGet);
               if (!sucessfulGet) {
                 return process.exit(125);
               }
               socket.write(messageGet);
               console.log(messageGet);
-              break;
-            case "withdraw":
-              let [sucessfulWithdraw, messageWithdraw] = withdrawAccountBalance(mbec_content);
-              if (!sucessfulWithdraw) {
-                return process.exit(125);
-              }
-              socket.write(messageWithdraw);
-              console.log(messageWithdraw);
               break;
             default:
               break;
@@ -405,11 +433,8 @@ const main = async () => {
     });
 
     process.on("SIGINT", () => {
-      // processing ctrl + c
-      console.log("\n Received SIGINT. Closing server...");
       // Perform any cleanup or additional actions as needed
       server.close(() => {
-        console.log("Server closed. Exiting...");
         process.exit(0); // Exit the process with a status code of 0 (success)
       });
     });
