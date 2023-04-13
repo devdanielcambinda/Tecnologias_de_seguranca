@@ -69,7 +69,7 @@ function createAccount(data: MBECRequest, runningServerAuthFile: string): Respon
   }
 
   //check if auth file matches the running server auth file
-  const valid = verifyAuthFile(data.mbec.data.auth_file, "mbce",runningServerAuthFile);
+  const valid = verifyAuthFile(data.mbec.data.auth_file, "Mbec",runningServerAuthFile);
   if (!valid) {
     return [false, "auth file does not match"];
   }
@@ -114,7 +114,7 @@ function depositAccountBalance(data: MBECRequest, runningServerAuthFile: string)
   }
 
   //check if auth file matches the running server auth file
-  const valid = verifyAuthFile(data.mbec.data.auth_file, "mbce",runningServerAuthFile);
+  const valid = verifyAuthFile(data.mbec.data.auth_file, "Mbec",runningServerAuthFile);
   if (!valid) {
     return [false, "auth file does not match"];
   }
@@ -159,7 +159,7 @@ function getAccountBalance(data: MBECRequest, runningServerAuthFile: string): Re
   }
 
   //check if auth file matches the running server auth file
-  const valid = verifyAuthFile(data.mbec.data.auth_file, "mbce",runningServerAuthFile);
+  const valid = verifyAuthFile(data.mbec.data.auth_file, "Mbec",runningServerAuthFile);
   if (!valid) {
     return [false, "auth file does not match"];
   }
@@ -199,7 +199,7 @@ function addCard(data: MBECRequest, runningServerAuthFile: string): Response {
   }
 
   //check if auth file matches the running server auth file
-  const valid = verifyAuthFile(data.mbec.data.auth_file, "mbce",runningServerAuthFile);
+  const valid = verifyAuthFile(data.mbec.data.auth_file, "Mbec",runningServerAuthFile);
   if (!valid) {
     return [false, "auth file does not match"];
   }
@@ -263,13 +263,13 @@ function validatePurchase(data: StoreRequest, runningServerAuthFile: string): Re
   }
   
   //check if auth file matches the running server auth file
-  const valid = verifyAuthFile(data.store.data.name_auth_file, "store",runningServerAuthFile);
+  const valid = verifyAuthFile(data.store.data.name_auth_file, "Store",runningServerAuthFile);
   if (!valid) {
     return [false, "auth file does not match"];
   }
 
   let balanceBeforeOperation = 0.00;
-/*
+
   const cardExists = Array.from(users).some( user => user.vcc![0] === data.store.data.vcc);
 
   if (!cardExists){
@@ -290,7 +290,8 @@ function validatePurchase(data: StoreRequest, runningServerAuthFile: string): Re
 
   if(!sucessful){
     return [false, JSON.stringify(`{isCardValid: false, accountBalanceBeforePurchase: 0.00 }`)];
-  }*/
+  }
+
   const jsonMessage = JSON.stringify(`{isCardValid: true, accountBalanceBeforePurchase: ${balanceBeforeOperation}, auth_file_name: ${runningServerAuthFile} }`)
   return [true, jsonMessage];
 }
@@ -363,9 +364,8 @@ const main = async () => {
     const server: net.Server = net.createServer(async (socket) => {
       socket.on("data", async (data: Buffer) => {
 
-        console.log("data: ", data.toString());
-        const data_decrypted  = decrypt(data.toString(),"abc.txt");
-        const data_content = JSON.parse(data_decrypted);
+        //const data_decrypted  = decrypt(data.toString(),"abc.txt");
+        const data_content = JSON.parse(data.toString());
 
         if (data_content.store) {
           const store_content = data_content as StoreRequest;
@@ -373,7 +373,7 @@ const main = async () => {
           if (!sucessful) {
             return process.exit(125);
           }
-          socket.write(message)
+          socket.write(message);
           return socket.end();
         }
 

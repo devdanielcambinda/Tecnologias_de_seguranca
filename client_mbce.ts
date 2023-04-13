@@ -14,7 +14,7 @@ const socket: net.Socket = net.connect(3000, "localhost", () => {
   //create account works ✔️
   //deposit works ✔️
   //get balance works ✔️
-  socket.write(add_card);
+  socket.write(get_balance);
 
   // Close the socket after sending the data
   //socket.end();
