@@ -2,7 +2,7 @@ import * as yargs from "yargs";
 import path from "path";
 import net from "net";
 import { existsSync, writeFile} from "fs";
-import {encrypt,decrypt, verifyAuthFile} from './util'
+import {verifyAuthFile, generateHash, parseRequest} from './util'
 
 
 // type definitions
@@ -259,40 +259,46 @@ function validatePurchase(data: StoreRequest, runningServerAuthFile: string): Re
   
   if (!isValid) {
     // true if both required keys are in the data object
-    return [false, "essential keys are missing"];
+    return [false, JSON.stringify({isCardValid: false, message: 'essitial operation keys missing', auth_file_name: runningServerAuthFile })];
   }
   
   //check if auth file matches the running server auth file
   const valid = verifyAuthFile(data.store.data.name_auth_file, "Store",runningServerAuthFile);
   if (!valid) {
-    return [false, "auth file does not match"];
+    return [false, JSON.stringify({isCardValid: false, message: 'auth file do not match', auth_file_name: runningServerAuthFile })];
   }
-
-  let balanceBeforeOperation = 0.00;
 
   const cardExists = Array.from(users).some( user => user.vcc![0] === data.store.data.vcc);
 
   if (!cardExists){
-    return [false, JSON.stringify(`{isCardValid: false, accountBalanceBeforePurchase: 0.00 }`)];
+    return [false, JSON.stringify({isCardValid: false, message: 'card does not exist', auth_file_name: runningServerAuthFile })];
   }
 
   let sucessful:boolean = false
+  let message: string = '' 
   users.forEach((user) => {
     if (user.vcc![0] === data.store.data.vcc) {
-      if(user.balance - data.store.data.shopping_value < 0.00){
-        return sucessful = false
+      if(user.vcc![2] === true){ //[vcc_file_name, vcc_balance , used]
+        sucessful = false;
+        return message += "card has already been used"
       }
-      balanceBeforeOperation = user.balance;
+
+      if(user.balance - data.store.data.shopping_value < 0.00){
+        sucessful = false;
+        return message += 'insufficient funds'
+      }
+
       user.balance -= data.store.data.shopping_value!;
-      return sucessful = true;
+      sucessful = true;
+      return message = "card is valid"
     }
   });
 
   if(!sucessful){
-    return [false, JSON.stringify(`{isCardValid: false, accountBalanceBeforePurchase: 0.00 }`)];
+    return [false, JSON.stringify({isCardValid: false, message , auth_file_name: runningServerAuthFile })];
   }
 
-  const jsonMessage = JSON.stringify(`{isCardValid: true, accountBalanceBeforePurchase: ${balanceBeforeOperation}, auth_file_name: ${runningServerAuthFile} }`)
+  const jsonMessage = JSON.stringify({isCardValid: true, message, auth_file_name: runningServerAuthFile })
   return [true, jsonMessage];
 }
 
@@ -315,8 +321,6 @@ const main = async () => {
         const argvKeys = Object.keys(argv);
         const permitedKeys = ["p", "s", "_", "$0"];
         const validArgs = argvKeys.every((key) => permitedKeys.includes(key));
-
-        console.log("validArgs: ", validArgs);
 
         // if there are any invalid arguments
         if (!validArgs) {
@@ -351,7 +355,7 @@ const main = async () => {
     const authFilePath = path.join(__dirname, s);
     const authFileExists = existsSync(authFilePath);
     if (authFileExists) {
-      //console.log("auth file already exists");
+      console.log("auth file already exists");
       return process.exit(125);
     }
 
@@ -364,16 +368,23 @@ const main = async () => {
     const server: net.Server = net.createServer(async (socket) => {
       socket.on("data", async (data: Buffer) => {
 
-        //const data_decrypted  = decrypt(data.toString(),"abc.txt");
-        const data_content = JSON.parse(data.toString());
+        const [requestJson,hashValue] = parseRequest(data.toString());
 
+        const hashedRequest = generateHash(requestJson,s!);
+
+        if( hashValue !== hashedRequest){
+          return process.exit(125);
+        }
+
+        const data_content = JSON.parse(requestJson);
+        console.log(data_content);
+        
+        
         if (data_content.store) {
           const store_content = data_content as StoreRequest;
-          let [sucessful, message] = validatePurchase(store_content, s!);
-          if (!sucessful) {
-            return process.exit(125);
-          }
-          socket.write(message);
+          let [_sucessful, message] = validatePurchase(store_content, s!);
+          const dataToSend = message + "###_hash_value: " + generateHash(message,'./bank.auth')
+          socket.write(dataToSend);
           return socket.end();
         }
 
@@ -407,7 +418,6 @@ const main = async () => {
               break
             case "get":
               let [sucessfulGet, messageGet] = getAccountBalance(mbec_content,s!);
-              console.log(sucessfulGet, messageGet);
               if (!sucessfulGet) {
                 return process.exit(125);
               }
@@ -417,7 +427,7 @@ const main = async () => {
             default:
               break;
           }
-        }
+        } 
 
         return socket.end();
       });
@@ -439,7 +449,7 @@ const main = async () => {
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error(err)
   }
 };
 
