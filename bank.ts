@@ -55,8 +55,6 @@ function generateRandomString(length: number): string {
   return result;
 }
 
-
-
 function createAccount(data: MBECRequest, runningServerAuthFile: string): Response {
   //check mbec.data keys and see if they are valid for this operation
   const requiredKeys = ["account", "initial_balance","auth_file", "account_file"];
@@ -373,7 +371,7 @@ const main = async () => {
         const hashedRequest = generateHash(requestJson,s!);
 
         if( hashValue !== hashedRequest){
-          return process.exit(125);
+          return console.log("hash value do not match");
         }
 
         const data_content = JSON.parse(requestJson);
@@ -395,15 +393,16 @@ const main = async () => {
               let [sucessful, message] = createAccount(mbec_content,s!);
 
               if (!sucessful) {
-                return process.exit(125);
+                return console.log(message);
               }
+
               socket.write(message);
               console.log(message);
               break;
             case "deposit":
               let [sucessfulDeposit, messageDeposit] = depositAccountBalance(mbec_content,s!);
               if (!sucessfulDeposit) {
-                return process.exit(125);
+                return console.log(messageDeposit);
               }
               socket.write(messageDeposit);
               console.log(messageDeposit);
@@ -411,7 +410,7 @@ const main = async () => {
             case "add_card":
               let [sucessfulAddCard, messageAddCard] = addCard(mbec_content,s!);
               if (!sucessfulAddCard) {
-                return process.exit(125);
+                return console.log(messageAddCard);
               }
               socket.write(messageAddCard);
               console.log(messageAddCard);
@@ -419,7 +418,7 @@ const main = async () => {
             case "get":
               let [sucessfulGet, messageGet] = getAccountBalance(mbec_content,s!);
               if (!sucessfulGet) {
-                return process.exit(125);
+                return console.log(messageGet);
               }
               socket.write(messageGet);
               console.log(messageGet);

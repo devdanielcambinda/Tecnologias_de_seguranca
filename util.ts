@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import * as fs from 'node:fs';
 
 export function verifyAuthFile(auth_file: string, origin: string,runningServerAuthFile: string): boolean {
-    const auth_file_data = fs.readFileSync(`../${origin}/${auth_file}`, "utf-8");
+    const auth_file_data = fs.readFileSync(auth_file, "utf-8");
     const runningServerAuthFile_data = fs.readFileSync(runningServerAuthFile, "utf-8");
     if(auth_file_data !== runningServerAuthFile_data){
       return false
